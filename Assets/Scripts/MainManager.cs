@@ -1,31 +1,57 @@
-using System.Collections;
-using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class MainManager : MonoBehaviour
 {
+    // Singleton instance
+    public static MainManager Instance { get; private set; }
+
+    // Game objects and prefabs
     public Brick BrickPrefab;
-    public int LineCount = 6;
     public Rigidbody Ball;
-
     public Text ScoreText;
+    public Text BestScoreText;
     public GameObject GameOverText;
-    
-    private bool m_Started = false;
-    private int m_Points;
-    
-    private bool m_GameOver = false;
 
-    
-    // Start is called before the first frame update
-    void Start()
+    // Game settings
+    public int LineCount = 6;
+
+    // Game state
+    private bool m_Started = false;
+    private bool m_GameOver = false;
+    private int m_Points;
+
+    private void Awake()
+    {
+        // Singleton pattern implementation
+        if (Instance != null)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        Instance = this;
+        InitializeGame();
+    }
+
+    private void InitializeGame()
+    {
+        // Set player name from DataManager or default
+        string currentPlayer = DataManager.Instance?.playerName ?? "Player";
+        UpdateBestScoreDisplay();
+
+        // Initialize brick layout
+        SetupBricks();
+    }
+
+    private void SetupBricks()
     {
         const float step = 0.6f;
         int perLine = Mathf.FloorToInt(4.0f / step);
-        
-        int[] pointCountArray = new [] {1,1,2,2,5,5};
+        int[] pointCountArray = new[] { 1, 1, 2, 2, 5, 5 };
+
         for (int i = 0; i < LineCount; ++i)
         {
             for (int x = 0; x < perLine; ++x)
@@ -40,37 +66,59 @@ public class MainManager : MonoBehaviour
 
     private void Update()
     {
-        if (!m_Started)
+        if (!m_Started && Input.GetKeyDown(KeyCode.Space))
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                m_Started = true;
-                float randomDirection = Random.Range(-1.0f, 1.0f);
-                Vector3 forceDir = new Vector3(randomDirection, 1, 0);
-                forceDir.Normalize();
-
-                Ball.transform.SetParent(null);
-                Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
-            }
+            StartGame();
         }
-        else if (m_GameOver)
+        else if (m_GameOver && Input.GetKeyDown(KeyCode.Space))
         {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-            }
+            RestartGame();
         }
     }
 
-    void AddPoint(int point)
+    private void StartGame()
+    {
+        m_Started = true;
+        float randomDirection = Random.Range(-1.0f, 1.0f);
+        Vector3 forceDir = new Vector3(randomDirection, 1, 0).normalized;
+
+        Ball.transform.SetParent(null);
+        Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
+    }
+
+    private void RestartGame()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    private void AddPoint(int point)
     {
         m_Points += point;
-        ScoreText.text = $"Score : {m_Points}";
+        ScoreText.text = $"{DataManager.Instance.playerName}: {m_Points}";
     }
 
     public void GameOver()
     {
         m_GameOver = true;
         GameOverText.SetActive(true);
+
+        // Check and update high score
+        if (m_Points > DataManager.Instance.bestScore)
+        {
+            DataManager.Instance.bestScore = m_Points;
+            DataManager.Instance.bestPlayer = DataManager.Instance.playerName;
+            DataManager.Instance.SaveHighScore();
+            UpdateBestScoreDisplay();
+        }
     }
+
+    private void UpdateBestScoreDisplay()
+    {
+        if (BestScoreText != null)
+        {
+            BestScoreText.text = $"Best: {DataManager.Instance.bestPlayer} - {DataManager.Instance.bestScore}";
+        }
+    }
+
+    // Removed SaveData class and file operations - moved to DataManager
 }
